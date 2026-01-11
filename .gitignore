@@ -1,0 +1,19 @@
+# System
+.DS_Store
+*.log
+__pycache__/
+
+# Python
+.venv/
+venv/
+*.pyc
+
+# Project Specific
+input/
+output/
+done/
+.qwen_key
+
+# IDE
+.idea/
+.vscode/
