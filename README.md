@@ -52,6 +52,17 @@ This tool uses AI and forensic analysis to automatically remove complex watermar
     *   ✅ 复杂的矢量绘图水印 (蓝色/黑色线条)
     *   ✅ 伪装成阴影的双层水印 (红色分离层)
 
+#### 4. 图片/扫描件去水印模式 (Image Mode)
+*   **适用**: 扫描件、或者由图片合成的 PDF（文字选不中）。
+*   **原理**: 自动拆解成图片 -> AI/算法修图 -> 重新合成 PDF。
+*   **怎么用**:
+    1. 进入 `image_mode_pic_watermark` 文件夹。
+    2. 双击运行 `run_image_mode.command`。
+    3. **选择模式**:
+       - `1`: 本地急速 (Local)
+       - `2`: 阿里 AI 修复 (Wanx Cloud) - **推荐**，效果最好。
+
+
 ---
 
 ## 📦 如何发给别人使用？(Distribution)
