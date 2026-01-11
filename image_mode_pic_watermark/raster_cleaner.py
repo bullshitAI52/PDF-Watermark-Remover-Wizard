@@ -51,6 +51,17 @@ def clean_image_with_ai(image_path):
     result[mask == 255] = [255, 255, 255]
     return result
 
+def clean_image(img):
+    """
+    Local CV2 cleaning (Thresholding fallback).
+    """
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Simple thresholding: turn light gray pixels to white
+    _, mask = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+    result = img.copy()
+    result[mask == 255] = [255, 255, 255]
+    return result
+
 def process_pdf(pdf_path, use_ai=False):
     filename = os.path.basename(pdf_path)
     name, ext = os.path.splitext(filename)
@@ -193,18 +204,23 @@ def select_mode():
 def main():
     ensure_dirs()
     files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith('.pdf')]
+    print(f"DEBUG: Input Directory: {os.path.abspath(INPUT_DIR)}")
+    print(f"DEBUG: Files Found: {files}")
+    
     if not files:
-        print(f"No PDFs found in {INPUT_DIR}")
-        return
-        
+        print(f"❌ Error: No PDF files found in '{INPUT_DIR}'!")
+        print(f"👉 Please make sure you put your PDF inside: {os.path.abspath(INPUT_DIR)}")
+        return 
+
     mode = select_mode()
     
+    
     for f in files:
-        # If AI mode selected, override the cleaning function inside process_pdf?
-        # NO, process_pdf calls specific logic. Let's make process_pdf take 'mode'
-        # Or simpler: Update process_pdf to use a global choice or argument.
         process_pdf(os.path.join(INPUT_DIR, f), use_ai=(mode=='2'))
 
 # Update process_pdf signature in memory (need to rewrite that part too)
+
+if __name__ == "__main__":
+    main()
 
 
