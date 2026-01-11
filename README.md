@@ -1,5 +1,14 @@
 # PDF Watermark Removal Assistant (PDF 水印批量删除助手)
 
+> ⚠️ **Disclaimer / 免责声明**:
+> This tool is for **Personal Study and Research ONLY**.
+> **Strictly PROHIBITED for Commercial Use.**
+> 本工具仅供**个人学习与研究**使用。
+> **严禁用于任何商业用途**（包括但不限于倒卖软件、有偿去水印服务等）。
+> 
+> The author bears no responsibility for any legal consequences arising from the use of this tool.
+> 作者不对任何因使用本工具导致的法律后果承担责任。
+
 [English](#english) | [中文说明](#chinese)
 
 <a name="english"></a>
