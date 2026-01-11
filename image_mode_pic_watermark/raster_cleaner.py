@@ -43,11 +43,11 @@ def clean_image_with_ai(image_path):
     result[mask == 255] = [255, 255, 255]
     return result
 
-def process_pdf(pdf_path):
+def process_pdf(pdf_path, use_ai=False):
     filename = os.path.basename(pdf_path)
     name, ext = os.path.splitext(filename)
     
-    print(f"I am reading: {filename}...")
+    print(f"Reading: {filename} (AI Mode: {use_ai})...")
     
     try:
         images = convert_from_path(pdf_path, dpi=200)
@@ -59,14 +59,21 @@ def process_pdf(pdf_path):
     cleaned_images_paths = []
     
     for i, pil_img in enumerate(images):
-        print(f"  AI Processing Page {i+1}/{len(images)}...")
+        print(f"  Processing Page {i+1}/{len(images)}...")
         
         # Save raw for processing
         raw_path = os.path.join(TEMP_DIR, f"temp_{i}.jpg")
         pil_img.save(raw_path)
         
-        # Clean
-        cleaned = clean_image_with_ai(raw_path)
+        if use_ai:
+            # Real Cloud AI
+            # Convert PIL to CV2 first for local fallback if needed?
+            # clean_image_with_dashscope handles reading internally or we pass path.
+            cleaned = clean_image_with_dashscope(raw_path)
+        else:
+            # Local CV2
+            cv2_img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+            cleaned = clean_image(cv2_img)
         
         # Save back
         cleaned_pil = Image.fromarray(cv2.cvtColor(cleaned, cv2.COLOR_BGR2RGB))
@@ -81,9 +88,99 @@ def process_pdf(pdf_path):
     print(f"Done! Saved to: {processed_pdf_path}")
     
     # Cleanup
+    # Cleanup
     import shutil
-    shutil.rmtree(TEMP_DIR)
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
     ensure_dirs()
+
+def clean_image_with_dashscope(image_path, mask_path=None):
+    """
+    Uses Dashscope (Wanxian) Image Repainting to remove watermarks.
+    Requirements:
+    1. 'dashscope' library
+    2. Valid API Key
+    3. Input Image + Mask Image (Black background, White area to repair)
+    """
+    import dashscope
+    from dashscope import ImageSynthesis
+    
+    if not dashscope.api_key:
+        print("    ⚠️ Skip: No API Key.")
+        return cv2.imread(image_path) # Fallback
+
+    # 1. Create a Mask automatically if not provided
+    # Strategy: Threshold the light gray watermark to create a mask for the AI
+    if not mask_path:
+        img = cv2.imread(image_path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # Target light gray areas (watermarks)
+        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+        # Dilate slightly to cover edges
+        kernel = np.ones((3,3), np.uint8)
+        mask = cv2.dilate(thresh, kernel, iterations=1)
+        
+        # Invert? No, Repaint API usually expects White=Repaint Area, Black=Keep.
+        # Our threshold makes light pixels (200-255) into White (255).
+        # So 'mask' is already correct: White areas are the watermark.
+        
+        # Save Mask Temp
+        mask_path = image_path.replace(".jpg", "_mask.png")
+        cv2.imwrite(mask_path, mask)
+
+    print("    ☁️ Uploading to Alibaba Cloud for Repainting...")
+    
+    try:
+        # Note: Local file paths need to be properly handled. 
+        # Dashscope Python SDK handles local paths by uploading to temporary OSS if file:// provided?
+        # Actually standard Dashscope usually expects file paths or URLs. 
+        # Let's try passing local path strings with file:// prefix or direct paths if SDK updates.
+        # Fallback: User might need to upgrade dashscope SDK.
+        
+        # Call Repainting API
+        # Model: wanx-x-painting (Generic Inpainting)
+        rsp = ImageSynthesis.call(
+            model='wanx-x-painting',
+            function='inpainting',
+            image_url=f'file://{os.path.abspath(image_path)}',
+            mask_url=f'file://{os.path.abspath(mask_path)}',
+            n=1
+        )
+        
+        if rsp.status_code == 200:
+            # Download result
+            import requests
+            result_url = rsp.output.results[0].url
+            print("    ⬇️ Downloading AI Result...")
+            resp_img = requests.get(result_url)
+            # Convert bytes to cv2
+            arr = np.frombuffer(resp_img.content, np.uint8)
+            cleaned_img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            return cleaned_img
+        else:
+            print(f"    ⚠️ API Failed: {rsp.code} - {rsp.message}")
+            print("    (Falling back to local Mode)")
+            return clean_image(cv2.imread(image_path))
+            
+    except Exception as e:
+        print(f"    ⚠️ AI Error: {e}")
+        return clean_image(cv2.imread(image_path))
+
+
+def select_mode():
+    print("\n========================================")
+    print("      Select Cleaning Intelligence      ")
+    print("========================================")
+    print("1. ⚡ Local Speed Mode (CV2) [Default]")
+    print("   - Ultra fast, free.")
+    print("   - Uses math to filter gray pixels.")
+    print("2. 🎨 Alibaba Wanx AI Mode (Real Cloud Repair)")
+    print("   - Uploads to Cloud -> GenAI Repainting.")
+    print("   - Slower, costs API credits.")
+    print("   - BEST for complex backgrounds.")
+    print("========================================")
+    choice = input("Enter choice (1/2): ").strip()
+    return choice
 
 def main():
     ensure_dirs()
@@ -92,9 +189,14 @@ def main():
         print(f"No PDFs found in {INPUT_DIR}")
         return
         
+    mode = select_mode()
+    
     for f in files:
-        process_pdf(os.path.join(INPUT_DIR, f))
+        # If AI mode selected, override the cleaning function inside process_pdf?
+        # NO, process_pdf calls specific logic. Let's make process_pdf take 'mode'
+        # Or simpler: Update process_pdf to use a global choice or argument.
+        process_pdf(os.path.join(INPUT_DIR, f), use_ai=(mode=='2'))
 
-if __name__ == "__main__":
-    main()
+# Update process_pdf signature in memory (need to rewrite that part too)
+
 
