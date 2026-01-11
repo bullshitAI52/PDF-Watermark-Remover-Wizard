@@ -1,50 +1,78 @@
-# PDF Watermark Removal Assistant (Pro Version)
+# PDF Watermark Removal Assistant (PDF 水印批量删除助手)
+
+[English](#english) | [中文说明](#chinese)
+
+<a name="english"></a>
+## 🇬🇧 English Guide
 
 This tool uses AI and forensic analysis to automatically remove complex watermarks from PDF files.
 
-## 🚀 Quick Start (Recommended)
+### 🚀 Quick Start
+1.  **Put PDFs** into the `input` folder.
+2.  **Double-click** `fix_and_run_ai.command`.
+3.  **Get cleaned files** from the `output` folder.
 
-1.  **Put your PDF files** into the `input` folder.
-2.  **Double-click** the `fix_and_run_ai.command` file.
-    *   This automatically fixes dependencies and runs the **One-Click AI Removal**.
-    *   It detects watermarks intelligently (Text, Tiled Images, etc.).
-3.  **Get your files** from the `output` folder.
-
----
-
-## 🛠️ Operating Modes
-
-### Level 1: One-Click AI (Standard)
-*   **Run**: `fix_and_run_ai.command`
-*   **Best for**: Most common watermarks (Text, repetitve images).
-*   **How it works**: Uses Qwen AI to "look" at the file and decide what to delete.
-
-### Level 2: Interactive Wizard
-*   **Run**: `start_mac.command` -> Choose Option 1 ("Wizard")
-*   **Best for**: When you want to double-check what the AI found before deleting.
-*   **How it works**: Shows you a list of candidates and asks "Is this a watermark? [Y/N]".
-
-### Level 3: The "Universal Killer" (Forensic)
-*   **Run**: `python universal_killer_v2.py` (via Terminal)
-*   **Best for**: **Extremely stubborn watermarks** that are hidden in layers, shadows, or vector paths (like the "2015" or "Blue/Black" ones).
-*   **How it works**: Aggressively targets:
-    *   Tiled Background Images (20k+ fragments)
-    *   Vector Paths (Blue, Red/Shadow layers)
-    *   Invisible Text / Garbled Characters
-    *   **Warning**: This mode is very powerful. Check your formulas/diagrams afterwards.
+### 🛠️ Modes
+*   **One-Click AI (`fix_and_run_ai`)**: Best for standard files. Uses AI to detect watermarks.
+*   **Forensic "Killer" (`universal_killer_v2.py`)**: For stubborn watermarks (Shadows, Vectors). Run via terminal: `python universal_killer_v2.py`.
 
 ---
 
-## ❓ FAQ
+<a name="chinese"></a>
+## 🇨🇳 中文说明
 
-### Q: Do I need to send you screenshots?
-**A: Only if Level 1 and Level 2 fail.**
+这是一个基于 AI 和深度取证技术的 PDF 水印去除工具，专门用来处理那些“删不掉”的顽固水印。
 
-*   **Normal Case**: No. The AI tools (`fix_and_run_ai`) can usually find it blindly.
-*   **Tough Case**: If the watermark is still there (or strange colors remain), **YES**, please:
-    1.  Provide a **Screenshot** of the watermark.
-    2.  Tell me if it "overlaps" text or is underneath.
-    3.  I will then write a custom "Killer Script" (like `universal_killer_v2.py`) to target that specific visual pattern.
+### 🚀 快速开始 (小白适用)
+1.  把你的 PDF 文件放入 **`input`** 文件夹。
+2.  双击运行 **`fix_and_run_ai.command`** (Mac) 或运行脚本。
+    *   程序会自动检测水印并删除。
+3.  去 **`output`** 文件夹领取处理好的文件。
 
-### Q: Why did the watermark turn black?
-**A:** Some watermarks are "Layered". We removed the top (Blue) layer, revealing the bottom (Shadow) layer. Running the **Universal Killer** (`universal_killer_v2.py`) solves this.
+### 🛠️ 三种模式介绍
+
+#### 1. 全自动 AI 模式 (Level 1)
+*   **怎么用**: 直接双击 `fix_and_run_ai.command`。
+*   **适用**: 90% 的常见水印（文字、Logo）。
+*   **原理**: 调用 AI 智能分析页面内容，自动判断垃圾信息。
+
+#### 2. 人工辅助模式 (Level 2)
+*   **怎么用**: 运行 `start_mac.command` -> 选择 "Interactive Wizard"。
+*   **适用**: 当 AI 拿不准时，它会列出是个嫌疑对象，问你 "Yes/No"。
+
+#### 3. 核弹清洗模式 (Level 3 - 强力推荐)
+*   **什么时候用**: 当你发现水印**变色了**、**变成阴影了**、或者**只删了一半**。
+*   **怎么用**:
+    在终端输入：
+    ```bash
+    python3 universal_killer_v2.py
+    ```
+*   **威力**: 这是一个经过特殊定制的脚本，能强力清除：
+    *   ✅ 看不见的透明文字 (`<˛ÆL`)
+    *   ✅ 复杂的矢量绘图水印 (蓝色/黑色线条)
+    *   ✅ 伪装成阴影的双层水印 (红色分离层)
+
+---
+
+## 📦 如何发给别人使用？(Distribution)
+
+如果你想把这个工具发给**没有安装 Python 环境**的朋友使用，建议打包成独立程序：
+
+### 方法 1: 对方懂一点技术
+让他安装 Python，然后把整个文件夹发给他，让他按照上面的步骤运行。
+
+### 方法 2: 打包成 EXE/APP (推荐)
+你可以使用 `PyInstaller` 把脚本打包成一个可以直接运行的文件。
+
+**安装打包工具**:
+```bash
+pip install pyinstaller
+```
+
+**打包命令 (Mac/Windows 通用)**:
+```bash
+# 打包全能清洗脚本
+pyinstaller --onefile universal_killer_v2.py
+```
+打包完成后，在 `dist` 文件夹里会生成一个可执行文件。你只需要把**那个文件**发给朋友，他就能用了（不需要装 Python）。
+
