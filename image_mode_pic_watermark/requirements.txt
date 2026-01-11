@@ -1,0 +1,5 @@
+pdf2image
+img2pdf
+opencv-python-headless
+numpy
+pillow
