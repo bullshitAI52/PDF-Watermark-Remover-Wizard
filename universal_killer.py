@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------------------------
+# DISCLAIMER: This tool is for PERSONAL STUDY & RESEARCH ONLY.
+# STRICTLY PROHIBITED FOR COMMERCIAL USE or ILLEGAL ACTIVITIES.
+# The author assumes NO LIABILITY for any misuse of this software.
+# 免责声明：本工具仅供个人学习研究，严禁用于商业或非法用途。作者不对任何滥用后果负责。
+# -----------------------------------------------------------------------------
 import pikepdf
 import os
 
