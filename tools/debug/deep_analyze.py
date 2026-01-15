@@ -21,8 +21,18 @@ if '/XObject' in resources:
     xobjects = resources['/XObject']
     print(f"Found {len(xobjects)} XObjects:")
     for name, xobj in xobjects.items():
-        type_str = str(xobj.get('/Subtype', 'Unknown'))
-        print(f"  {name}: {type_str}")
+        if xobj is None: continue
+        type_str = 'Unknown' # Initialize type_str
+        try:
+            type_str = str(xobj.get('/Subtype', 'Unknown'))
+            print(f"  - {name}: {type_str}")
+            if type_str == '/Image':
+                # ... (existing image logic if any)
+                pass
+        except Exception as e:
+            print(f"  Error processing XObject {name}: {e}")
+            # Continue to the next XObject if there's an error in getting subtype
+            continue
         
         # If it's a Form, let's peek inside
         if type_str == '/Form':

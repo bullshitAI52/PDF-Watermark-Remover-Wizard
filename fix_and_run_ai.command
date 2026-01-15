@@ -20,7 +20,7 @@ echo "2. Re-installing AI libraries (fixing missing Dashscope)..."
 
 echo "3. Starting One-Click AI Removal..."
 echo "----------------------------------------"
-.venv/bin/python pdf_watermark_remover.py --auto-ai
+.venv/bin/python src/main.py --auto-ai
 
 echo ""
 echo "========================================"

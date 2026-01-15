@@ -9,11 +9,12 @@
 import pikepdf
 import os
 
-INPUT_DIR = 'input'
-OUTPUT_DIR = 'output'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INPUT_DIR = os.path.join(BASE_DIR, 'input')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
 
-filename = '初赛 详解.pdf'
+filename = '四年级期末复习打卡（高频考点）.pdf' # Updated to match user file or auto-detect
 filepath = os.path.join(INPUT_DIR, filename)
 
 if not os.path.exists(filepath):
@@ -22,7 +23,7 @@ if not os.path.exists(filepath):
         filepath = os.path.join(INPUT_DIR, files[0])
         filename = files[0]
     else:
-        print("Input file not found!")
+        print("Input file not found! Please check 'input' folder.")
         exit()
 
 print(f"Universal Killer V2: Processing {filename}")

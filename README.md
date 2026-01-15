@@ -26,8 +26,8 @@ This tool uses AI and forensic analysis to automatically remove complex watermar
 3.  **Get cleaned files** from the `output` folder.
 
 ### 🛠️ Modes
-*   **One-Click AI (`fix_and_run_ai`)**: Best for standard files. Uses AI to detect watermarks.
-*   **Forensic "Killer" (`universal_killer_v2.py`)**: For stubborn watermarks (Shadows, Vectors). Run via terminal: `python universal_killer_v2.py`.
+*   **One-Click AI (`start_mac.command`)**: Best for standard files. Uses AI to detect watermarks.
+*   **Forensic "Killer" (`src/vector_killer.py`)**: For stubborn watermarks (Shadows, Vectors). Run via terminal: `python src/vector_killer.py`.
 
 ---
 
@@ -38,42 +38,33 @@ This tool uses AI and forensic analysis to automatically remove complex watermar
 
 ### 🚀 快速开始 (小白适用)
 1.  把你的 PDF 文件放入 **`input`** 文件夹。
-2.  双击运行 **`fix_and_run_ai.command`** (Mac) 或运行脚本。
-    *   程序会自动检测水印并删除。
+2.  双击运行 **`start_mac.command`** (Mac)。
 3.  去 **`output`** 文件夹领取处理好的文件。
 
 ### 🛠️ 三种模式介绍
 
 #### 1. 全自动 AI 模式 (Level 1)
-*   **怎么用**: 直接双击 `fix_and_run_ai.command`。
+*   **怎么用**: 运行 `start_mac.command` -> 选择 "Interactive Wizard" 或 "Vision AI"。
 *   **适用**: 90% 的常见水印（文字、Logo）。
-*   **原理**: 调用 AI 智能分析页面内容，自动判断垃圾信息。
 
-#### 2. 人工辅助模式 (Level 2)
-*   **怎么用**: 运行 `start_mac.command` -> 选择 "Interactive Wizard"。
-*   **适用**: 当 AI 拿不准时，它会列出是个嫌疑对象，问你 "Yes/No"。
-
-#### 3. 核弹清洗模式 (Level 3 - 强力推荐)
+#### 2. 核弹清洗模式 (Level 3 - 强力推荐)
 *   **什么时候用**: 当你发现水印**变色了**、**变成阴影了**、或者**只删了一半**。
 *   **怎么用**:
     在终端输入：
     ```bash
-    python3 universal_killer_v2.py
+    python3 src/vector_killer.py
     ```
-*   **威力**: 这是一个经过特殊定制的脚本，能强力清除：
-    *   ✅ 看不见的透明文字 (`<˛ÆL`)
-    *   ✅ 复杂的矢量绘图水印 (蓝色/黑色线条)
-    *   ✅ 伪装成阴影的双层水印 (红色分离层)
 
-#### 4. 图片/扫描件去水印模式 (Image Mode)
-*   **适用**: 扫描件、或者由图片合成的 PDF（文字选不中）。
-*   **原理**: 自动拆解成图片 -> AI/算法修图 -> 重新合成 PDF。
+#### 5. 图片/扫描件去水印模式 (Image Mode)
+*   **适用**: 扫描件、JPG/PNG 图片、或者文字根本选不中的 PDF。
+*   **亮点**: **现已支持 JPG/PNG 图片直接去水印！**
 *   **怎么用**:
     1. 进入 `image_mode_pic_watermark` 文件夹。
-    2. 双击运行 `run_image_mode.command`。
-    3. **选择模式**:
-       - `1`: 本地急速 (Local)
-       - `2`: 阿里 AI 修复 (Wanx Cloud) - **推荐**，效果最好。
+    2. 把文件（PDF 或 JPG/PNG）放入 `input` 文件夹。
+    3. 双击运行 `run_image_mode.command`。
+    4. **选择模式**:
+       - `1`: 本地急速 (Local CV2) - 免费快。
+       - `2`: 阿里 AI 修复 (Wanx Cloud) - **推荐**，智能重绘背景，效果惊人。
 
 
 ---

@@ -25,18 +25,21 @@ echo "1. 🚀  One-Click AI Removal (No Questions Asked!)"
 echo "       - AI automatically finds and deletes watermark"
 echo "----------------------------------------"
 echo "2. 🪄  Wizard Mode (Ask me to confirm)"
-echo "3. 🛠️  Manual Mode (Edit script manually)"
-echo "4. ❌  Exit"
+echo "3. 👁️  Vision AI (Look at the page)"
+echo "4. 🛠️  Manual Mode (Edit script manually)"
+echo "5. ❌  Exit"
 echo "========================================"
 read -p "Type 1 and press Enter: " choice
 choice=${choice:-1} # Default to 1
 
 if [ "$choice" == "1" ]; then
-    "$VENV_DIR/bin/python" pdf_watermark_remover.py --auto-ai
+    "$VENV_DIR/bin/python" src/main.py --auto-ai
 elif [ "$choice" == "2" ]; then
-    "$VENV_DIR/bin/python" pdf_watermark_remover.py --wizard
+    "$VENV_DIR/bin/python" src/main.py --wizard
 elif [ "$choice" == "3" ]; then
-    "$VENV_DIR/bin/python" pdf_watermark_remover.py --manual
+    "$VENV_DIR/bin/python" src/main.py --vision
+elif [ "$choice" == "4" ]; then
+    "$VENV_DIR/bin/python" src/main.py --manual
 else
     echo "Exiting..."
 fi
