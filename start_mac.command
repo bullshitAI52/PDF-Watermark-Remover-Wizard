@@ -40,10 +40,18 @@ echo "----------------------------------------"
 echo "6. 🖼️  Local Image Mode (Speed)"
 echo "       - Best for: Scanned PDFs & Images (.jpg/.png)."
 echo "       - Info: Fast, Free, Converts PDF to Image."
+echo "----------------------------------------"
+echo "7. 🤖  Auto-Pilot (Standard)"
+echo "       - Strategy: Text (1) -> Vector (5) -> Image (6)"
+echo "       - Final Step: Fast Local Image (Free)."
+echo "----------------------------------------"
+echo "8. 🧠  Auto-Pilot (Ultimate/Quality)"
+echo "       - Strategy: Text (1) -> Vector (5) -> Wanx AI (4)"
+echo "       - Final Step: Cloud AI Inpainting (Cost Credits)."
 echo "========================================"
 echo "0. ❌  Exit"
 echo "========================================"
-read -p "Type 1-6 and press Enter: " choice
+read -p "Type 1-8 and press Enter: " choice
 choice=${choice:-1} # Default to 1
 
 if [ "$choice" == "1" ]; then
@@ -58,6 +66,10 @@ elif [ "$choice" == "5" ]; then
     "$VENV_DIR/bin/python" src/vector_killer.py
 elif [ "$choice" == "6" ]; then
     "$VENV_DIR/bin/python" image_mode_pic_watermark/raster_cleaner.py --mode 1
+elif [ "$choice" == "7" ]; then
+    ./auto_pilot.command
+elif [ "$choice" == "8" ]; then
+    ./auto_pilot.command --quality
 else
     echo "Exiting..."
 fi

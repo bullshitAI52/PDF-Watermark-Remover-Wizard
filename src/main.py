@@ -533,7 +533,7 @@ def main():
         targets = auto_detect_wizard(files, force_ai=True)
         if not targets:
             print("AI didn't find a confident watermark. Please try Manual Mode.")
-            return
+            sys.exit(10) # Exit code 10: Nothing found
 
     # Mode 2.5: Vision AI
     elif len(sys.argv) > 1 and sys.argv[1] == '--vision':
@@ -568,7 +568,7 @@ def main():
 
     if not targets:
         print("No watermarks selected. Exiting.")
-        return
+        sys.exit(10) # Ensure we exit with 10 if targets is empty
 
     print(f"\nPreparing to remove: {targets}")
     print("Starting Batch Processing...")

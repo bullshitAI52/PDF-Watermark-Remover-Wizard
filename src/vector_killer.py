@@ -121,15 +121,19 @@ def process_page(pdf, page, page_num):
     
     return removed_count
 
+import sys
+
 def main():
     files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith('.pdf')]
     
     if not files:
         print("No PDF files found in 'input' folder!")
-        return
+        sys.exit(10) # Exit 10
 
     print(f"Found {len(files)} PDFs. Starting Batch Process...")
     
+    global_total_removed = 0
+
     for filename in files:
         filepath = os.path.join(INPUT_DIR, filename)
         print(f"\nProcessing: {filename}")
@@ -140,12 +144,24 @@ def main():
             for i, p in enumerate(pdf.pages):
                 total += process_page(pdf, p, i+1)
             
-            out_path = os.path.join(OUTPUT_DIR, filename)
-            pdf.save(out_path)
-            print(f"  -> Finished! Removed {total} objects. Saved to output.")
+            if total > 0:
+                out_path = os.path.join(OUTPUT_DIR, filename)
+                pdf.save(out_path)
+                print(f"  -> Finished! Removed {total} objects. Saved to output.")
+                global_total_removed += total
+            else:
+                # If nothing removed, should we save? Maybe not to save time/space?
+                # But for consistency, let's say we don't save if 0 changes.
+                print("  -> No objects removed.")
             
         except Exception as e:
             print(f"  -> Failed to process {filename}: {e}")
+
+    # Exit Codes for Auto-Pilot
+    if global_total_removed > 0:
+        sys.exit(0) # Success
+    else:
+        sys.exit(10) # Nothing found/removed
 
 if __name__ == "__main__":
     main()
