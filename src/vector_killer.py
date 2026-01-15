@@ -14,19 +14,7 @@ INPUT_DIR = os.path.join(BASE_DIR, 'input')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
 
-filename = '四年级期末复习打卡（高频考点）.pdf' # Updated to match user file or auto-detect
-filepath = os.path.join(INPUT_DIR, filename)
-
-if not os.path.exists(filepath):
-    files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith('.pdf')]
-    if files:
-        filepath = os.path.join(INPUT_DIR, files[0])
-        filename = files[0]
-    else:
-        print("Input file not found! Please check 'input' folder.")
-        exit()
-
-print(f"Universal Killer V2: Processing {filename}")
+print(f"Universal Killer V2: Scanning '{INPUT_DIR}'...")
 
 def get_color_type(operands):
     # Returns: 'BLUE', 'RED', 'BLACK', 'OTHER'
@@ -129,15 +117,35 @@ def process_page(pdf, page, page_num):
     if removed_count > 0:
         new_content = pikepdf.unparse_content_stream(filtered_commands)
         page.Contents = pdf.make_stream(new_content)
-        print(f"  Page {page_num}: Cleaned {removed_count} items.")
+        # print(f"  Page {page_num}: Cleaned {removed_count} items.")
     
     return removed_count
 
-pdf = pikepdf.open(filepath, allow_overwriting_input=True)
-total = 0
-for i, p in enumerate(pdf.pages):
-    total += process_page(pdf, p, i+1)
+def main():
+    files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith('.pdf')]
+    
+    if not files:
+        print("No PDF files found in 'input' folder!")
+        return
 
-out_path = os.path.join(OUTPUT_DIR, filename)
-pdf.save(out_path)
-print(f"Finished V2. Total objects removed: {total}")
+    print(f"Found {len(files)} PDFs. Starting Batch Process...")
+    
+    for filename in files:
+        filepath = os.path.join(INPUT_DIR, filename)
+        print(f"\nProcessing: {filename}")
+        
+        try:
+            pdf = pikepdf.open(filepath, allow_overwriting_input=True)
+            total = 0
+            for i, p in enumerate(pdf.pages):
+                total += process_page(pdf, p, i+1)
+            
+            out_path = os.path.join(OUTPUT_DIR, filename)
+            pdf.save(out_path)
+            print(f"  -> Finished! Removed {total} objects. Saved to output.")
+            
+        except Exception as e:
+            print(f"  -> Failed to process {filename}: {e}")
+
+if __name__ == "__main__":
+    main()

@@ -9,6 +9,7 @@ import os
 # 免责声明：本工具仅供个人学习研究，严禁用于商业或非法用途。作者不对任何滥用后果负责。
 # -----------------------------------------------------------------------------
 import sys
+import json
 from collections import Counter
 
 # =================CONFIGURATION=================
@@ -288,7 +289,15 @@ def detect_watermark_vision(pdf_path):
         
     dashscope.api_key = api_key
     
-    prompt = "Look at this page. Is there a watermark (text or repeated pattern)? If yes, extract the watermark text exactly. If no watermark, say 'None'. Return ONLY the text."
+    prompt = (
+        "Analyze this image for watermarks. A watermark is typically:"
+        "1. Faint, transparent text overlaid on top of content (often diagonal)."
+        "2. Repeated logos or text patterns in the background."
+        "3. URLs or 'Scanned by' text in headers/footers.\n\n"
+        "If you see a watermark, extract clearly ONLY the text content of the watermark. "
+        "Do not describe it, just give me the text. "
+        "If there is NO watermark, return the word 'None'."
+    )
     
     messages = [
         {
@@ -340,7 +349,7 @@ def ask_ai_for_help(candidates, scan_limit, auto_confirm=False):
     print("\n🤖 Asking Qwen AI to identifying watermarks from candidates...")
     
     # 1. Prepare data
-    candidate_list_str = "\n".join([f"{i+1}. '{text}' (Freq: {count})" for i, (text, count) in enumerate(candidates)])
+    candidate_list_str = "\n".join([f"{i+1}. '{text}' (Freq: {count} - Appears on {count}/{scan_limit} scanned pages)" for i, (text, count) in enumerate(candidates)])
     
     # 2. Setup AI
     import dashscope
@@ -361,37 +370,76 @@ def ask_ai_for_help(candidates, scan_limit, auto_confirm=False):
     
     # Prompt
     prompt = f"""
-    I have a list of frequently appearing strings from a PDF. Help me identify which ones are WATERMARKS, SPAM, or Header/Footer noise that should be removed.
+    I am analyzing a PDF document to remove watermarks. I have extracted some frequently appearing text strings.
+    Please help me identify which strings are definitely WATERMARKS that interfere with reading.
+    
+    Context:
+    - The PDF has {scan_limit} pages scanned.
+    - If a string appears {scan_limit} times, it is on EVERY page.
     
     Candidates:
     {candidate_list_str}
     
     Instructions:
-    - Return a Python list of strings that ARE watermarks.
-    - Example return format: ["Watermark1", "Confidential"]
-    - If none, return []
-    - Be aggressive with obviously spammy text (urls, 'scanned by', etc).
+    1. Identify strings that look like:
+       - Promotional text (e.g., "Scan by...", "Created with...", "Paid version")
+       - Names of institutions/teachers repeated on every page (e.g., "Teacher Guo", "Xiamen School")
+       - Useless headers/footers that serve no educational purpose.
+       - URLs or phone numbers.
+    2. Do NOT remove:
+       - Page numbers (e.g., "1", "2", "- 1 -") UNLESS they are combined with ads.
+       - Chapter titles (unless they overlap content).
+    3. Return your answer in JSON format:
+       {{
+           "watermarks": ["text to remove 1", "text to remove 2"],
+           "reason": "Brief explanation of why these were chosen"
+       }}
+    4. If no obvious watermark is found, return {{"watermarks": [], "reason": "None"}}
     """
     
     try:
         response = dashscope.Generation.call(
-            model='qwen-turbo',
+            model='qwen-plus', # Upgraded to Plus for better logic
             messages=[{'role': 'user', 'content': prompt}],
             result_format='message'
         )
         
         if response.status_code == HTTPStatus.OK:
             content = response.output.choices[0].message.content
-            print(f"AI Analysis: {content}")
+            # Cleanup code blocks if present
+            if "```json" in content:
+                content = content.replace("```json", "").replace("```", "")
             
-            # Simple parsing: check which candidate texts are present in the AI's output
-            # This avoids complex JSON parsing which might fail
-            suspects = []
-            for text, _ in candidates:
-                if text in content:
-                    suspects.append(text)
+            print(f"AI Analysis Raw: {content[:100]}...")
             
-            return suspects
+            try:
+                data = json.loads(content)
+                suspects = data.get("watermarks", [])
+                reason = data.get("reason", "No reason provided")
+                print(f"AI Reason: {reason}")
+                
+                # Double check: ensure suspects are actually in our candidate list
+                # (AI might slightly hallucinate or trim text)
+                valid_suspects = []
+                candidate_texts = [c[0] for c in candidates]
+                
+                for s in suspects:
+                    if s in candidate_texts:
+                        valid_suspects.append(s)
+                    else:
+                        # fuzzy matching or warn?
+                        pass
+                        
+                return valid_suspects
+                
+            except json.JSONDecodeError:
+                print("⚠️ AI return invalid JSON, falling back to text search.")
+                # Fallback to old text search method
+                suspects = []
+                for text, _ in candidates:
+                    if text in content:
+                        suspects.append(text)
+                return suspects
         else:
             print(f"AI Check Failed: {response.code} - {response.message}")
             return [text for text, count in candidates if count >= scan_limit]

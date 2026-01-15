@@ -16,11 +16,13 @@ from PIL import Image
 import dashscope
 from dashscope import MultiModalConversation
 import time
+import concurrent.futures
 
 # Configuration
-INPUT_DIR = 'input'
-OUTPUT_DIR = 'output'
-TEMP_DIR = 'temp_images'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INPUT_DIR = os.path.join(BASE_DIR, 'input')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
+TEMP_DIR = os.path.join(BASE_DIR, 'temp_images')
 
 # Global State
 AI_QUOTA_EXCEEDED = False
@@ -28,7 +30,7 @@ AI_QUOTA_EXCEEDED = False
 # Load API Key
 try:
     # Try looking in parent directory if running from subdirectory
-    possible_keys = ['.qwen_key', '../.qwen_key', '../../.qwen_key']
+    possible_keys = ['.qwen_key', '../.qwen_key', '../../.qwen_key', '../src/.qwen_key']
     found_key = False
     for k in possible_keys:
         if os.path.exists(k):
@@ -71,8 +73,6 @@ def clean_image(img, margin_pct=0):
     margin_pct: Percentage of top/bottom to erase (e.g. 10 for 10%).
     """
     rows, cols, _ = img.shape
-    
-    # 0. Apply Margin Eraser (Blind Cut)
     
     # 0. Apply Margin Eraser (Blind Cut)
     # Support dictionary or simple usage
@@ -140,6 +140,37 @@ def clean_image(img, margin_pct=0):
     
     return result
 
+def process_page_task(args):
+    """
+    Worker function for parallel processing.
+    args: (index, image_array (numpy), use_ai, margin_pct)
+    """
+    i, img_arr, use_ai, margin_pct = args
+    
+    # 1. AI check
+    # Note: AI parallel might hit rate limits faster, but let's allow it logic-wise or prevent it.
+    # Since 'AI' here uses 'AI_QUOTA_EXCEEDED' global, which doesn't work well across processes without Manager,
+    # we will assume Local Mode is the primary target for parallel speedup. 
+    # AI Mode usually requires file upload anyway, so we might skip parallel for AI mode inside this function if needed,
+    # OR just be careful. For now, we support local.
+    
+    if use_ai:
+        # Saving to temp is needed for AI API usually, but here we just return control
+        # Because global variable AI_QUOTA_EXCEEDED won't sync easily.
+        # Fallback to single threaded logic if needed, OR just run local logic.
+        # For this optimization, we prioritize Local Speed.
+        pass
+
+    # Processing
+    # Convert RGB (PIL/pdf2image default) to BGR (OpenCV)
+    img_bgr = cv2.cvtColor(img_arr, cv2.COLOR_RGB2BGR)
+    cleaned = clean_image(img_bgr, margin_pct)
+    
+    # Convert back to RGB for saving
+    cleaned_rgb = cv2.cvtColor(cleaned, cv2.COLOR_BGR2RGB)
+    
+    return (i, cleaned_rgb)
+
 def process_file(file_path, use_ai=False, margin_pct=0):
     filename = os.path.basename(file_path)
     name, ext = os.path.splitext(filename)
@@ -150,32 +181,73 @@ def process_file(file_path, use_ai=False, margin_pct=0):
     # Case A: PDF
     if ext == '.pdf':
         try:
+            print("  Loading PDF pages...")
+            # Convert all at once (Memory intensive for huge files, but fastest for average files)
             images = convert_from_path(file_path, dpi=200)
         except Exception as e:
             print(f"Error reading PDF: {e}")
             return
 
         processed_pdf_path = os.path.join(OUTPUT_DIR, f"{name}_cleaned.pdf")
-        cleaned_images_paths = []
         
+        # Prepare Tasks
+        tasks = []
         for i, pil_img in enumerate(images):
-            print(f"  Page {i+1}/{len(images)}...")
+            # Convert PIL to Numpy Array (RGB)
+            img_arr = np.array(pil_img)
+            tasks.append((i, img_arr, use_ai, margin_pct))
             
-            # Save raw for processing
-            raw_path = os.path.join(TEMP_DIR, f"temp_{i}.jpg")
-            pil_img.save(raw_path)
-            
-            cleaned_img_arr = process_single_image(raw_path, use_ai, margin_pct)
-            
-            # Save back
-            cleaned_pil = Image.fromarray(cv2.cvtColor(cleaned_img_arr, cv2.COLOR_BGR2RGB))
-            out_path = os.path.join(TEMP_DIR, f"clean_{i}.jpg")
-            cleaned_pil.save(out_path, quality=90)
-            cleaned_images_paths.append(out_path)
+        print(f"  Cleaning {len(images)} pages (Parallel)...")
+        
+        results = []
+        if use_ai:
+            # AI Mode: Serial processing to respect rate limits and simpler state managment
+            print("  (AI Mode active: Running sequentially to avoid rate limits)")
+            for task in tasks:
+                 # Revert to old temp file logic? No, just adapt task.
+                 # But wait, the task function expects numpy.
+                 # Let's just run logic here for AI.
+                 idx = task[0]
+                 print(f"    Page {idx+1}/{len(images)}...", end='\r')
+                 # Save temp for AI upload
+                 raw_path = os.path.join(TEMP_DIR, f"temp_{idx}.jpg")
+                 # Convert task numpy back to BGR for saving, or just use PIL from 'images' list
+                 images[idx].save(raw_path)
+                 
+                 cleaned_bgr = process_single_image(raw_path, True, margin_pct)
+                 cleaned_rgb = cv2.cvtColor(cleaned_bgr, cv2.COLOR_BGR2RGB)
+                 results.append((idx, cleaned_rgb))
+        else:
+            # Parallel Local Mode
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                for result in executor.map(process_page_task, tasks):
+                    results.append(result)
+                    print(f"  Finished Page {result[0]+1}/{len(images)}", end='\r')
 
-        print(f"  Recombining PDF...")
+        # Sort results by index just in case
+        results.sort(key=lambda x: x[0])
+        
+        print(f"\n  Recombining PDF...")
+        
+        # Cleaned images to bytes
+        pdf_bytes_list = []
+        for _, img_rgb in results:
+            pil_out = Image.fromarray(img_rgb)
+            # Save to temporary buffer or file? img2pdf likes files or raw bytes.
+            # Using memory buffer:
+            # img2pdf.convert(pil_image.tostring()) ? No, img2pdf wants jpeg/png bytes usually for size.
+            # Let's save to temp dir sequentially to ensure img2pdf works best (it packs JPEGs efficiently).
+            # OR just re-enable temp files but only for writing the final output before merge.
+            # Actually, img2pdf can take PIL images directly in newer versions or we save to temp.
+            # Saving to temp is safer for img2pdf compatibility.
+            
+            # Using a temp filename based on index
+            temp_out = os.path.join(TEMP_DIR, f"final_{_}.jpg")
+            pil_out.save(temp_out, quality=90)
+            pdf_bytes_list.append(temp_out)
+
         with open(processed_pdf_path, "wb") as f:
-            f.write(img2pdf.convert(cleaned_images_paths))
+            f.write(img2pdf.convert(pdf_bytes_list))
             
         print(f"Done! Saved to: {os.path.abspath(processed_pdf_path)}")
         
@@ -330,6 +402,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # Windows/Mac multiprocess safe guard
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()
-
-
