@@ -1,6 +1,0 @@
-Inspecting: 四年级期末复习打卡（高频考点）.pdf
-
---- DUMPING ALL TEXT TOKENS FROM PAGE 1 ---
-OP: TJ | DATA: pikepdf._core._ObjectList([pikepdf.Array([ "2025-2026" ])])
-OP: TJ | DATA: pikepdf._core._ObjectList([pikepdf.Array([ "Ñ§ÄêËÄÄê", Decimal('-0.002'), "¼¶ÉÏ²áÊýÑ§", Decimal('0.002'), "£¨¸ßÆµ¿¼µã£©" ])])
-OP: TJ | DATA: pikepdf._core._ObjectList([pikepdf.Array([ "Ã¿´ü" ])])

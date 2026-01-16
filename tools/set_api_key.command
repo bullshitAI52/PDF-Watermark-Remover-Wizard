@@ -5,7 +5,7 @@ echo "========================================================"
 echo "          PDF Watermark Assistant - API Setup           "
 echo "========================================================"
 
-KEY_FILE=".qwen_key"
+KEY_FILE="../.qwen_key"
 
 if [ -f "$KEY_FILE" ]; then
     CURRENT_KEY=$(cat "$KEY_FILE")

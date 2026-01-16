@@ -21,8 +21,8 @@ echo "    PDF Watermark Remover (Mac)"
 echo "========================================"
 echo " Detected $(ls input/*.pdf 2>/dev/null | wc -l) files in 'input' folder."
 echo "========================================"
-echo "1. 🚀  One-Click AI Removal (Text Based)"
-echo "       - Best for: Normal PDFs with selectable text watermarks."
+echo "1. 🚀  Auto-Heuristic (No AI - Fast)"
+echo "       - Best for: Repeating watermarks (Text & Blocks)."
 echo "----------------------------------------"
 echo "2. 🪄  Wizard Mode (Interactive)"
 echo "       - Best for: When Mode 1 deletes too much."
@@ -41,17 +41,13 @@ echo "6. 🖼️  Local Image Mode (Speed)"
 echo "       - Best for: Scanned PDFs & Images (.jpg/.png)."
 echo "       - Info: Fast, Free, Converts PDF to Image."
 echo "----------------------------------------"
-echo "7. 🤖  Auto-Pilot (Standard)"
-echo "       - Strategy: Text (1) -> Vector (5) -> Image (6)"
-echo "       - Final Step: Fast Local Image (Free)."
 echo "----------------------------------------"
-echo "8. 🧠  Auto-Pilot (Ultimate/Quality)"
-echo "       - Strategy: Text (1) -> Vector (5) -> Wanx AI (4)"
-echo "       - Final Step: Cloud AI Inpainting (Cost Credits)."
+echo "7. ⚙️  Settings (API Key)"
+echo "       - Set up your Cloud AI keys."
 echo "========================================"
 echo "0. ❌  Exit"
 echo "========================================"
-read -p "Type 1-8 and press Enter: " choice
+read -p "Type 1-7 (or 0) and press Enter: " choice
 choice=${choice:-1} # Default to 1
 
 if [ "$choice" == "1" ]; then
@@ -67,9 +63,7 @@ elif [ "$choice" == "5" ]; then
 elif [ "$choice" == "6" ]; then
     "$VENV_DIR/bin/python" image_mode_pic_watermark/raster_cleaner.py --mode 1
 elif [ "$choice" == "7" ]; then
-    ./auto_pilot.command
-elif [ "$choice" == "8" ]; then
-    ./auto_pilot.command --quality
+    tools/set_api_key.command
 else
     echo "Exiting..."
 fi

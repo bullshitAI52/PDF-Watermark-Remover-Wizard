@@ -11,16 +11,18 @@ echo "      Auto-Repair & Run AI Mode"
 echo "========================================"
 echo "1. Checking environment..."
 
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+VENV_DIR="../.venv"
+
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR"
 fi
 
 echo "2. Re-installing AI libraries (fixing missing Dashscope)..."
-.venv/bin/pip install pikepdf dashscope
+"$VENV_DIR/bin/pip" install pikepdf dashscope
 
 echo "3. Starting One-Click AI Removal..."
 echo "----------------------------------------"
-.venv/bin/python src/main.py --auto-ai
+"$VENV_DIR/bin/python" ../src/main.py --auto-ai
 
 echo ""
 echo "========================================"
