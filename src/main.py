@@ -824,6 +824,15 @@ def auto_detect_wizard(files, force_ai=False, heuristic_mode=False):
         if suspicious_imgs:
             print(f"\n📸 Found {len(suspicious_imgs)} suspicious IMAGES found on most pages:")
             
+            # Batch Offer
+            if len(suspicious_imgs) > 3 and not force_ai and not heuristic_mode:
+                batch_choice = input(f"  ?? Found many ({len(suspicious_imgs)}) image types. Remove ALL of them? (y/n): ").lower().strip()
+                if batch_choice == 'y':
+                    for dim, count in suspicious_imgs:
+                         selected_dimensions.add(dim)
+                    print(f"     ✅ Marked all {len(suspicious_imgs)} images for removal.")
+                    suspicious_imgs = [] 
+
             for dim, count in suspicious_imgs:
                 # Wizard style Prompt
                 print(f"  -> Image Size: [{dim}] (Found on {count}/{scan_limit} pages)")
@@ -874,7 +883,30 @@ def auto_detect_wizard(files, force_ai=False, heuristic_mode=False):
         # 4. Interactive Mode (Text)
         selected_texts = []
         if candidates:
-            print(f"\n📝 Found {len(candidates)} suspicious TEXT items.")
+            print(f"\n📝 Found {len(candidates)} suspicious TEXT/OBJECT items.")
+            
+            # Count how many are Objects (start with /)
+            obj_candidates = [c for c in candidates if c[0].startswith('/')]
+            
+            # Batch Offer for Objects
+            if len(obj_candidates) > 3:
+                 print(f"  👉 Found {len(obj_candidates)} items strictly named XObjects (e.g. /Im... /X...).")
+                 batch_choice = input(f"     Do you want to batch remove ALL {len(obj_candidates)} XObjects? (y/n): ").lower().strip()
+                 if batch_choice == 'y':
+                     for text, count in obj_candidates:
+                         selected_texts.append(text)
+                     print(f"     ✅ Marked all {len(obj_candidates)} XObjects for removal.")
+                     candidates = [c for c in candidates if not c[0].startswith('/')]
+            
+            # Batch Offer for Remaining Items (Garbage Text / Vectors)
+            if len(candidates) > 5:
+                 print(f"  👉 Remaining {len(candidates)} items (likely text fragments or unclassified objects).")
+                 batch_choice = input(f"     Do you want to batch remove ALL remaining {len(candidates)} items? (y/n): ").lower().strip()
+                 if batch_choice == 'y':
+                     for text, count in candidates:
+                         selected_texts.append(text)
+                     print(f"     ✅ Marked all {len(candidates)} remaining items for removal.")
+                     candidates = [] # Clear list
             
             for idx, (text, count) in enumerate(candidates[:20]): # Limit to top 20 interactive
                     print(f"\nCandidate #{idx+1}: [ {text} ] (Found {count} times)")

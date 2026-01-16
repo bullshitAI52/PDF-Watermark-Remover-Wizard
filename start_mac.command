@@ -36,6 +36,7 @@ echo "       - Info: High Quality, Slow, Consumes Credits."
 echo "----------------------------------------"
 echo "5. ☢️  Nuclear Mode (Vector Killer)"
 echo "       - Best for: Stubborn vector paths/shapes. PDF Only."
+echo "       - 5b: 🌫️  Gray Vector Killer (For stubborn gray watermarks)"
 echo "----------------------------------------"
 echo "6. 🖼️  Local Image Mode (Speed)"
 echo "       - Best for: Scanned PDFs & Images (.jpg/.png)."
@@ -48,7 +49,9 @@ echo "========================================"
 echo "0. ❌  Exit"
 echo "========================================"
 read -p "Type 1-7 (or 0) and press Enter: " choice
+choice=$(echo "$choice" | xargs) # Trim whitespace
 choice=${choice:-1} # Default to 1
+echo "Debug: You selected '$choice'"
 
 if [ "$choice" == "1" ]; then
     "$VENV_DIR/bin/python" src/main.py --auto-ai
@@ -60,6 +63,8 @@ elif [ "$choice" == "4" ]; then
     "$VENV_DIR/bin/python" image_mode_pic_watermark/raster_cleaner.py --mode 2
 elif [ "$choice" == "5" ]; then
     "$VENV_DIR/bin/python" src/vector_killer.py
+elif [ "$choice" == "5b" ]; then
+    "$VENV_DIR/bin/python" src/vector_killer.py --target-gray
 elif [ "$choice" == "6" ]; then
     "$VENV_DIR/bin/python" image_mode_pic_watermark/raster_cleaner.py --mode 1
 elif [ "$choice" == "7" ]; then

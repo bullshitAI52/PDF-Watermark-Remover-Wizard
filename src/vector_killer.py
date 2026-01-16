@@ -28,6 +28,7 @@ def get_color_type(operands):
         v = vals[0]
         if 0.49 <= v <= 0.51: return 'BLUE' # Pattern Blue
         if v < 0.1: return 'BLACK'
+        if 0.1 <= v <= 0.95: return 'GRAY' # Light to Dark Gray
         
     # 3. RGB
     elif len(vals) == 3:
@@ -40,15 +41,20 @@ def get_color_type(operands):
         
         # Black
         if v1 < 0.1 and v2 < 0.1 and v3 < 0.1: return 'BLACK'
+        
+        # Gray (RGB values roughly equal and not black/white)
+        if abs(v1 - v2) < 0.1 and abs(v2 - v3) < 0.1 and 0.1 < v1 < 0.95:
+            return 'GRAY'
 
     elif len(vals) == 4: # CMYK
         c, m, y, k = vals
         if k > 0.9: return 'BLACK'
         if c > 0.5 and y < 0.1: return 'BLUE'
+        if k > 0.1 and k < 0.9 and c < 0.1: return 'GRAY'
         
     return 'OTHER'
 
-def process_page(pdf, page, page_num):
+def process_page(pdf, page, page_num, target_gray=False):
     try:
         commands = pikepdf.parse_content_stream(page)
     except: return 0
@@ -88,6 +94,8 @@ def process_page(pdf, page, page_num):
         if op in ['f', 'F', 'f*']:
             if current_fill_type in ['BLUE', 'RED', 'BLACK']:
                 should_remove = True
+            if target_gray and current_fill_type == 'GRAY':
+                should_remove = True
             
         # Stroke (S, s) - Remove BLUE only. Protect RED/BLACK lines.
         elif op in ['S', 's']:
@@ -96,6 +104,8 @@ def process_page(pdf, page, page_num):
             elif current_stroke_type == 'RED': 
                 # The shadow might be red strokes?
                 # Let's remove them too to be safe. Valid diagrams are usually Black.
+                should_remove = True
+            if target_gray and current_stroke_type == 'GRAY':
                 should_remove = True
             
         # Both (B, b) - Remove ANY Bad
@@ -106,6 +116,9 @@ def process_page(pdf, page, page_num):
             # If Black Fill + Black Stroke?
             if current_fill_type == 'BLACK': 
                 # Removing B with black fill is safer than removing S.
+                should_remove = True
+
+            if target_gray and (current_fill_type == 'GRAY' or current_stroke_type == 'GRAY'):
                 should_remove = True
 
         if should_remove:
@@ -124,6 +137,11 @@ def process_page(pdf, page, page_num):
 import sys
 
 def main():
+    target_gray = False
+    if len(sys.argv) > 1 and sys.argv[1] == '--target-gray':
+        target_gray = True
+        print("⚠️  GRAY TARGET MODE ACTIVE: Will remove gray vectors (0.1-0.95).")
+    
     files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith('.pdf')]
     
     if not files:
@@ -142,7 +160,7 @@ def main():
             pdf = pikepdf.open(filepath, allow_overwriting_input=True)
             total = 0
             for i, p in enumerate(pdf.pages):
-                total += process_page(pdf, p, i+1)
+                total += process_page(pdf, p, i+1, target_gray=target_gray)
             
             if total > 0:
                 out_path = os.path.join(OUTPUT_DIR, filename)
