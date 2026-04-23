@@ -8,48 +8,71 @@ description: A powerful tool to remove stubborn watermarks from PDF files using 
 This skill allows the Agent to remove watermarks from PDF files using a set of specialized scripts.
 
 ## Directory Structure
-- Root: `/Users/apple/Documents/PDF水印批量删除助手 skill`
-- Input Directory: `input/`
-- Output Directory: `output/`
-- Image Mode Directory: `image_mode_pic_watermark/`
+- `core/`: Unified PDF processing engines.
+- `gui_app/`: Modern Desktop GUI interface.
+- `web/`: Interactive Web Wizard interface.
+- `utils/`: Shared configuration and file helpers.
+- `tools/`: Advanced forensic and debugging scripts.
+- `input/`: Place your PDFs here.
+- `output/`: Cleaned PDFs will appear here.
 
 ## Usage Instructions
 
-### 1. Standard AI Mode (Recommended for most PDFs)
-Best for standard text watermarks or simple logos.
+### Main Entry Point
+The unified entry point for all modes on Mac:
+```bash
+./start_mac.command
+```
 
-1.  **Place PDF(s)** into the `input/` folder in the root directory.
-2.  **Execute** the following command:
-    ```bash
-    /Users/apple/Documents/PDF水印批量删除助手\ skill/fix_and_run_ai.command
-    ```
-    *Note: This script automatically handles environment checks and watermark removal.*
-3.  **Retrieve** the cleaned PDF from the `output/` folder.
-
-### 2. Universal Killer Mode (For Stubborn Watermarks)
-Use this if the Standard AI Mode fails (e.g., watermark changes color, is a shadow, or only partially removed).
-
-1.  **Place PDF(s)** into the `input/` folder.
-2.  **Execute** the Python script:
-    ```bash
-    cd "/Users/apple/Documents/PDF水印批量删除助手 skill"
-    python3 universal_killer_v2.py
-    ```
-3.  **Retrieve** the cleaned PDF from the `output/` folder.
-
-### 3. Image Mode (For Scanned PDFs or Images)
-Use this for scanned documents or PDFs where text cannot be selected.
-
-1.  **Navigate** to the image mode directory: `/Users/apple/Documents/PDF水印批量删除助手 skill/image_mode_pic_watermark`.
-2.  **Place PDF or Image files** into `image_mode_pic_watermark/input/`.
-3.  **Execute** the run command:
-    ```bash
-    cd "/Users/apple/Documents/PDF水印批量删除助手 skill/image_mode_pic_watermark"
-    ./run_image_mode.command
-    ```
-    *   The script may ask for input (1 for Local, 2 for AI). Use `send_command_input` if interactive, or prefer the standard scripts if automation is needed.*
+### Modes Explanation
+1.  **Auto-Heuristic (Mode 1)**: Fast removal for standard repeating watermarks.
+2.  **Wizard Mode (Mode 2)**: Step-by-step confirmation of detected patterns.
+3.  **Vision AI (Mode 3)**: Uses Visual LLM to detect watermarks.
+4.  **AI Inpainting (Mode 4)**: Image-level watermark removal.
+5.  **Nuclear Mode (Mode 5)**: Strips vector paths and shapes.
+6.  **Local Image Mode (Mode 6)**: Fast, free local CV2 cleaning.
+7.  **Web Wizard (Mode 8)**: Modern interactive web interface.
+8.  **GUI Tool (Mode 9)**: Standalone desktop application.
 
 ## Important Notes
 - Always check the `output/` folder for results.
-- Do not modify the script files unless explicitly requested.
-- The `fix_and_run_ai.command` is the safest one-click entry point.
+- If `start_mac.command` fails due to permissions, run `chmod +x *.command` first.
+
+## Advanced Technique: Removing Image-Based PDF Watermarks (White Box Masking)
+
+When dealing with scanned PDFs where the entire page content is rasterized into a single image (e.g., a 1587x2245 `Image XObject`), watermarks like headers or footers are often baked directly into this background image. Standard text-matching operators (`Tj` / `TJ`) will fail to detect them, such as stubborn promotional text like "【厦门郭老师学习交流群 】" or "一 帮助更多家长获取厦门学习资源 —".
+
+### The Problem
+- The watermark text is not a text layer; it is part of the image.
+- Deleting the `Image XObject` would remove the entire page's legitimate content.
+
+### The Solution: White Box Masking
+Instead of deleting the image, we cover the baked-in watermarks by drawing white rectangles over them using PDF content stream operations. Since these watermarks typically appear at fixed positions (e.g., top headers and bottom footers), we can append drawing commands to the end of `page.Contents`.
+
+**Example Implementation:**
+```python
+import pikepdf
+
+# Open the PDF allowing in-place edits
+pdf = pikepdf.open('input.pdf', allow_overwriting_input=True)
+
+for page in pdf.pages:
+    # PDF graphics operators:
+    # `q`          : Save graphics state
+    # `1 1 1 rg`   : Set fill color to RGB white
+    # `x y w h re` : Define a rectangle path
+    # `f`          : Fill the path
+    # `Q`          : Restore graphics state
+    #
+    # Example below covers the header (Y > 790) and the footer (Y < 35)
+    cover_cmds = b'\nq\n1 1 1 rg\n0 790 1000 1000 re\nf\n0 0 1000 35 re\nf\nQ\n'
+    new_stream = pdf.make_stream(cover_cmds)
+    
+    if isinstance(page.Contents, pikepdf.Array):
+        page.Contents.append(new_stream)
+    else:
+        page.Contents = pikepdf.Array([page.Contents, new_stream])
+
+pdf.save('output.pdf')
+```
+This completely hides the baked-in text watermarks without breaking the layout or deleting the underlying scanned content.

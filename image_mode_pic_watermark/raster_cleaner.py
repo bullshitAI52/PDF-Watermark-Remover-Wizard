@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------
 import os
 import sys
+import argparse
 import numpy as np
 import cv2
 from pdf2image import convert_from_path
@@ -19,7 +20,10 @@ import time
 import concurrent.futures
 
 # Configuration
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INPUT_DIR = os.path.join(BASE_DIR, 'input')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 TEMP_DIR = os.path.join(BASE_DIR, 'temp_images')
@@ -67,11 +71,7 @@ def clean_image_with_ai(image_path):
     result[mask == 255] = [255, 255, 255]
     return result
 
-def clean_image(img, margin_pct=0):
-    """
-    Local CV2 cleaning with Green/Cyan Filter + Margin Eraser.
-    margin_pct: Percentage of top/bottom to erase (e.g. 10 for 10%).
-    """
+def clean_image(img, margin_pct=0, corners=None, strict_corner_mode=False, eraser_wh=(30,10), force_white=False):
     rows, cols, _ = img.shape
     
     # 0. Apply Margin Eraser (Blind Cut)
@@ -94,6 +94,13 @@ def clean_image(img, margin_pct=0):
         cut_h_bot = int(rows * (bottom_pct / 100))
         img[rows-cut_h_bot:rows, :] = [255, 255, 255] # White out Bottom
     
+    
+    # Strict Corner Mode: Skip all global color filters, ONLY do corner erasure
+    if strict_corner_mode:
+        if corners:
+            result = apply_corner_eraser(img, corners, w_pct=eraser_wh[0], h_pct=eraser_wh[1], force_white=force_white)
+        return result
+
     # 1. Convert to HSV
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
@@ -129,23 +136,88 @@ def clean_image(img, margin_pct=0):
     kernel = np.ones((2,2), np.uint8)
     color_mask = cv2.dilate(color_mask, kernel, iterations=1)
     
-    # 5. Also remove light gray background noise (Original Logic)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, gray_mask = cv2.threshold(gray, 210, 255, cv2.THRESH_BINARY)
-    
     # Apply: Turn masked pixels WHITE
     result = img.copy()
     result[color_mask > 0] = [255, 255, 255] # Erase Colors
-    # result[gray_mask == 255] = [255, 255, 255] # Optional: Clean background
-    
+
+    # Apply Corner Eraser if requested
+    if corners:
+        result = apply_corner_eraser(result, corners, w_pct=eraser_wh[0], h_pct=eraser_wh[1], force_white=force_white)
+        
     return result
+
+def apply_corner_eraser(img, corners, w_pct=30, h_pct=10, force_white=False):
+    """
+    Smart Eraser: Scans pixels in the corner. If pixel is NOT black text, erase it.
+    Preserves text (checking V < 100 in HSV).
+    force_white: If True, do blind white out (safer if smart erase leaves text noise).
+    """
+    if not corners: return img
+    
+    rows, cols, _ = img.shape
+    w_px = int(cols * (w_pct / 100))
+    h_px = int(rows * (h_pct / 100))
+    
+    # Helper to clean a region
+    def smart_clean_region(r1, r2, c1, c2):
+        # ROI
+        roi = img[r1:r2, c1:c2]
+        # Convert ROI to Grayscale for intensity check
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        
+        # Identify "Not Black" pixels
+        # Text is usually very dark (Intensity < 80)
+        # Watermark (Gray/Color) is usually lighter (> 100)
+        # Note: If watermark is black, this logic fails. But user said "Gray/Color".
+        
+        # Mask of pixels to delete: (Intensity > 80)
+        mask_to_delete = gray_roi > 80
+        
+        # But wait, white background is also > 80.
+        # So we erase everything > 80.
+        # Valid Text (Black) is < 80, so it stays.
+        # This is safe. Background (White 255) -> Erased to White (255). No change.
+        # Watermark (Gray 150) -> Erased to White.
+        # Text (Black 0) -> Kept.
+        
+        if force_white:
+             # Blind White Out
+             roi[:] = [255, 255, 255]
+             img[r1:r2, c1:c2] = roi 
+        else:
+             # Smart Erase (only clean non-black)
+             roi[mask_to_delete] = [255, 255, 255]
+             img[r1:r2, c1:c2] = roi
+
+    for c in corners:
+        c = c.strip().lower()
+        if c == 'tr': # Top Right
+            smart_clean_region(0, h_px, cols-w_px, cols)
+        elif c == 'tl': # Top Left
+            smart_clean_region(0, h_px, 0, w_px)
+        elif c == 'br': # Bottom Right
+            smart_clean_region(rows-h_px, rows, cols-w_px, cols)
+        elif c == 'bl': # Bottom Left
+            smart_clean_region(rows-h_px, rows, 0, w_px)
+            
+    return img
 
 def process_page_task(args):
     """
     Worker function for parallel processing.
     args: (index, image_array (numpy), use_ai, margin_pct)
     """
-    i, img_arr, use_ai, margin_pct = args
+def process_page_task(args):
+    """
+    Worker function for parallel processing.
+    args: (index, image_array, use_ai, margin_pct, corners_odd, corners_even)
+    """
+    i, img_arr, use_ai, margin_pct, c_odd, c_even, strict_mode, eraser_wh, force_white = args
+    
+    # Determine corners based on page number (1-based index)
+    # i is 0-based. Page 1 is i=0 (Odd). Page 2 is i=1 (Even).
+    page_num = i + 1
+    current_corners = c_odd if (page_num % 2 != 0) else c_even
     
     # 1. AI check
     # Note: AI parallel might hit rate limits faster, but let's allow it logic-wise or prevent it.
@@ -164,14 +236,14 @@ def process_page_task(args):
     # Processing
     # Convert RGB (PIL/pdf2image default) to BGR (OpenCV)
     img_bgr = cv2.cvtColor(img_arr, cv2.COLOR_RGB2BGR)
-    cleaned = clean_image(img_bgr, margin_pct)
+    cleaned = clean_image(img_bgr, margin_pct, corners=current_corners, strict_corner_mode=strict_mode, eraser_wh=eraser_wh, force_white=force_white)
     
     # Convert back to RGB for saving
     cleaned_rgb = cv2.cvtColor(cleaned, cv2.COLOR_BGR2RGB)
     
     return (i, cleaned_rgb)
 
-def process_file(file_path, use_ai=False, margin_pct=0):
+def process_file(file_path, use_ai=False, margin_pct=0, corners_odd=None, corners_even=None, strict_mode=False, eraser_wh=(30,10), force_white=False):
     filename = os.path.basename(file_path)
     name, ext = os.path.splitext(filename)
     ext = ext.lower()
@@ -194,8 +266,9 @@ def process_file(file_path, use_ai=False, margin_pct=0):
         tasks = []
         for i, pil_img in enumerate(images):
             # Convert PIL to Numpy Array (RGB)
+            # Convert PIL to Numpy Array (RGB)
             img_arr = np.array(pil_img)
-            tasks.append((i, img_arr, use_ai, margin_pct))
+            tasks.append((i, img_arr, use_ai, margin_pct, corners_odd, corners_even, strict_mode, eraser_wh, force_white))
             
         print(f"  Cleaning {len(images)} pages (Parallel)...")
         
@@ -261,14 +334,14 @@ def process_file(file_path, use_ai=False, margin_pct=0):
         cv2.imwrite(out_path, cleaned_img_arr)
         print(f"Done! Saved to: {out_path}")
 
-def process_single_image(image_path, use_ai, margin_pct):
+def process_single_image(image_path, use_ai, margin_pct, corners=None, strict_mode=False, eraser_wh=(30,10), force_white=False):
     """
     Helper to process one image file (path) and return CV2 array.
     """
     if use_ai:
         if AI_QUOTA_EXCEEDED:
              print("    ℹ️ (Skipping AI due to Quota Limit -> Local Mode)")
-             return clean_image(cv2.imread(image_path), margin_pct)
+             return clean_image(cv2.imread(image_path), margin_pct, corners, strict_mode, eraser_wh, force_white)
         else:
             time.sleep(1) # Rate limit
             return clean_image_with_dashscope(image_path)
@@ -278,7 +351,7 @@ def process_single_image(image_path, use_ai, margin_pct):
         if img is None:
              print(f"Error reading image: {image_path}")
              return np.zeros((100,100,3), np.uint8)
-        return clean_image(img, margin_pct)
+        return clean_image(img, margin_pct, corners, strict_mode, eraser_wh, force_white)
 
 def clean_image_with_dashscope(image_path, mask_path=None):
     """
@@ -324,7 +397,8 @@ def clean_image_with_dashscope(image_path, mask_path=None):
             return cleaned_img
         else:
             print(f"    ⚠️ API Failed: {rsp.code} - {rsp.message}")
-            return clean_image(cv2.imread(image_path))
+            return clean_image(cv2.imread(image_path), corners=None, strict_corner_mode=False) # AI fallback usually full? let's default safe
+
             
     except Exception as e:
         print(f"    ⚠️ AI Error: {e}")
@@ -367,32 +441,62 @@ def main():
 
     # Check for CLI args to bypass interaction
     # usage: python raster_cleaner.py --mode 1 --margin 10
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['1', '2'], help='Mode 1: Local, Mode 2: AI')
-    parser.add_argument('--margin', type=str, default="0", help='Margin percentage cut. Single number (e.g. 10) for both, or "10,5" for Top,Bottom')
+    parser.add_argument('--margin', type=str, default="0", help='Margin pct')
+    parser.add_argument('--corners', type=str, default="", help='Erase corners (Applied to ALL pages): tr,tl,br,bl')
+    parser.add_argument('--corners-odd', type=str, default="", help='Erase corners (Odd Pages): tr,tl,br,bl')
+    parser.add_argument('--corners-even', type=str, default="", help='Erase corners (Even Pages): tr,tl,br,bl')
+    parser.add_argument('--strict', action='store_true', help='Strict Mode: Only do corner erasure, NO global filter.')
+    parser.add_argument('--eraser-size', type=str, default="30,10", help='Width,Height percentage for corner eraser (default 30,10).')
+    parser.add_argument('--force-white', action='store_true', help='Force white fill in corners instead of smart erase.')
     args, unknown = parser.parse_known_args()
+    
+    margin_pct = 0
+    corners_odd = []
+    corners_even = []
+    eraser_wh = (30, 10)
+    
+    if args.eraser_size and ',' in args.eraser_size:
+        parts = args.eraser_size.split(',')
+        eraser_wh = (int(parts[0]), int(parts[1]))
     
     if args.mode:
         mode = args.mode
-        # Parse margin "10" or "10,5" (top, bottom)
         if ',' in str(args.margin):
             parts = str(args.margin).split(',')
             margin_pct = {'top': int(parts[0]), 'bottom': int(parts[1])}
         else:
             margin_pct = int(args.margin)
+            
+        # CLI Parsing
+        if args.corners:
+             # If generic corners provided, apply to both
+             c = args.corners.split(',')
+             corners_odd = c
+             corners_even = c
+        
+        if args.corners_odd:
+            corners_odd = args.corners_odd.split(',')
+        if args.corners_even:
+            corners_even = args.corners_even.split(',')
+            
     else:
         mode = select_mode()
-        # Ask about margins if Mode 1
-        margin_pct = 0
         if mode == '1':
             print("\n--- Header/Footer Cleaning ---")
             cut = input("Erase Top/Bottom X%? (Enter '10' for 10%, or Enter to skip): ").strip()
             if cut.isdigit():
                 margin_pct = int(cut)
+            
+            # Interactive Corners (Simplified, just asks for one set)
+            c_input = input("Erase Corners (tr,tl,br,bl)? (Enter 'tr,br' or skip): ").strip()
+            if c_input:
+                corners_odd = c_input.split(',')
+                corners_even = c_input.split(',')
     
     for f in files:
-        process_file(os.path.join(INPUT_DIR, f), use_ai=(mode=='2'), margin_pct=margin_pct)
+        process_file(os.path.join(INPUT_DIR, f), use_ai=(mode=='2'), margin_pct=margin_pct, corners_odd=corners_odd, corners_even=corners_even, strict_mode=args.strict, eraser_wh=eraser_wh, force_white=args.force_white)
     
     # Cleanup
     import shutil

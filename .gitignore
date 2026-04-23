@@ -13,6 +13,17 @@ input/
 output/
 done/
 .qwen_key
+temp_images/
+image_mode_pic_watermark/temp_images/
+
+# Build Artifacts
+build/
+dist/
+*.spec
+
+# Temporary Files
+temp_vision_check.jpg
+temp_form_preview.pdf
 
 # IDE
 .idea/
