@@ -15,7 +15,6 @@ from pdf2image import convert_from_path
 import img2pdf
 from PIL import Image
 import dashscope
-from dashscope import MultiModalConversation
 import time
 import concurrent.futures
 
@@ -30,6 +29,7 @@ TEMP_DIR = os.path.join(BASE_DIR, 'temp_images')
 
 # Global State
 AI_QUOTA_EXCEEDED = False
+found_key = False
 
 # Load API Key
 try:
@@ -42,7 +42,7 @@ try:
                 dashscope.api_key = f.read().strip()
                 found_key = True
                 break
-except:
+except Exception:
     pass
 
 if not found_key and not dashscope.api_key:
@@ -72,6 +72,7 @@ def clean_image_with_ai(image_path):
     return result
 
 def clean_image(img, margin_pct=0, corners=None, strict_corner_mode=False, eraser_wh=(30,10), force_white=False):
+    img = img.copy()
     rows, cols, _ = img.shape
     
     # 0. Apply Margin Eraser (Blind Cut)
@@ -97,6 +98,7 @@ def clean_image(img, margin_pct=0, corners=None, strict_corner_mode=False, erase
     
     # Strict Corner Mode: Skip all global color filters, ONLY do corner erasure
     if strict_corner_mode:
+        result = img
         if corners:
             result = apply_corner_eraser(img, corners, w_pct=eraser_wh[0], h_pct=eraser_wh[1], force_white=force_white)
         return result
@@ -205,11 +207,6 @@ def apply_corner_eraser(img, corners, w_pct=30, h_pct=10, force_white=False):
 def process_page_task(args):
     """
     Worker function for parallel processing.
-    args: (index, image_array (numpy), use_ai, margin_pct)
-    """
-def process_page_task(args):
-    """
-    Worker function for parallel processing.
     args: (index, image_array, use_ai, margin_pct, corners_odd, corners_even)
     """
     i, img_arr, use_ai, margin_pct, c_odd, c_even, strict_mode, eraser_wh, force_white = args
@@ -277,19 +274,23 @@ def process_file(file_path, use_ai=False, margin_pct=0, corners_odd=None, corner
             # AI Mode: Serial processing to respect rate limits and simpler state managment
             print("  (AI Mode active: Running sequentially to avoid rate limits)")
             for task in tasks:
-                 # Revert to old temp file logic? No, just adapt task.
-                 # But wait, the task function expects numpy.
-                 # Let's just run logic here for AI.
-                 idx = task[0]
-                 print(f"    Page {idx+1}/{len(images)}...", end='\r')
-                 # Save temp for AI upload
-                 raw_path = os.path.join(TEMP_DIR, f"temp_{idx}.jpg")
-                 # Convert task numpy back to BGR for saving, or just use PIL from 'images' list
-                 images[idx].save(raw_path)
-                 
-                 cleaned_bgr = process_single_image(raw_path, True, margin_pct)
-                 cleaned_rgb = cv2.cvtColor(cleaned_bgr, cv2.COLOR_BGR2RGB)
-                 results.append((idx, cleaned_rgb))
+                idx = task[0]
+                print(f"    Page {idx+1}/{len(images)}...", end='\r')
+                raw_path = os.path.join(TEMP_DIR, f"temp_{idx}.jpg")
+                current_corners = corners_odd if ((idx + 1) % 2 != 0) else corners_even
+                images[idx].save(raw_path)
+
+                cleaned_bgr = process_single_image(
+                    raw_path,
+                    True,
+                    margin_pct,
+                    corners=current_corners,
+                    strict_mode=strict_mode,
+                    eraser_wh=eraser_wh,
+                    force_white=force_white,
+                )
+                cleaned_rgb = cv2.cvtColor(cleaned_bgr, cv2.COLOR_BGR2RGB)
+                results.append((idx, cleaned_rgb))
         else:
             # Parallel Local Mode
             with concurrent.futures.ProcessPoolExecutor() as executor:
@@ -326,7 +327,15 @@ def process_file(file_path, use_ai=False, margin_pct=0, corners_odd=None, corner
         
     # Case B: Image (JPG, PNG, JPEG)
     elif ext in ['.jpg', '.jpeg', '.png']:
-        cleaned_img_arr = process_single_image(file_path, use_ai, margin_pct)
+        cleaned_img_arr = process_single_image(
+            file_path,
+            use_ai,
+            margin_pct,
+            corners=corners_odd,
+            strict_mode=strict_mode,
+            eraser_wh=eraser_wh,
+            force_white=force_white,
+        )
         
         out_name = f"{name}_cleaned{ext}"
         out_path = os.path.join(OUTPUT_DIR, out_name)
@@ -397,7 +406,7 @@ def clean_image_with_dashscope(image_path, mask_path=None):
             return cleaned_img
         else:
             print(f"    ⚠️ API Failed: {rsp.code} - {rsp.message}")
-            return clean_image(cv2.imread(image_path), corners=None, strict_corner_mode=False) # AI fallback usually full? let's default safe
+            return clean_image(cv2.imread(image_path)) # AI fallback usually full? let's default safe
 
             
     except Exception as e:
