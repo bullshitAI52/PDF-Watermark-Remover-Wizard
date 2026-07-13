@@ -6,9 +6,17 @@ class ObjectEngine:
     
     def __init__(self, doc):
         self.doc = doc
+        self._page_cache = {}
+
+    def invalidate_cache(self):
+        self._page_cache.clear()
 
     def get_page_objects(self, page_idx, filters=None):
         """Extracts all objects from a page, with improved drawing support."""
+        key = (page_idx, tuple(filters) if filters else None)
+        if key in self._page_cache:
+            return self._page_cache[key]
+
         page = self.doc[page_idx]
         objects = []
         
@@ -64,6 +72,7 @@ class ObjectEngine:
                         "height": rect.height
                     })
 
+        self._page_cache[key] = objects
         return objects
 
     def find_matches(self, template_obj, search_pages):
@@ -77,8 +86,10 @@ class ObjectEngine:
         tol_size = 2.0
         
         for page_idx in search_pages:
-            objs = self.get_page_objects(page_idx, filters=[t_type])
+            objs = self.get_page_objects(page_idx, filters=["text", "image", "drawing"])
             for obj in objs:
+                if obj["type"] != t_type:
+                    continue
                 if self._is_match(template_obj, obj, tol_pos, tol_size):
                     matches.append((page_idx, obj))
         return matches
