@@ -95,10 +95,9 @@ class PyMuPDFEngineV2:
                     inter_area = inter.get_area()
                     if inter_area / hit_area >= 0.45 or inter_area / tgt_area >= 0.45:
                         safe = self._clip_against_other_text(hit, text, page_words)
-                        if safe is not None and not safe.is_empty and safe.get_area() > 0:
+                        if not safe.is_empty and safe.get_area() > 0:
                             page.add_redact_annot(safe, fill=fill_color)
-                        elif safe is None:
-                            page.add_redact_annot(hit, fill=fill_color)
+                        # else: empty -> skip (cannot safely redact without damaging other text)
                         count += 1
                 if count:
                     return count
@@ -107,11 +106,9 @@ class PyMuPDFEngineV2:
             text = str(obj.get("text") or "").strip()
             if text:
                 safe = self._clip_against_other_text(target, text, page_words)
-                if safe is not None and not safe.is_empty and safe.get_area() > 0:
+                if not safe.is_empty and safe.get_area() > 0:
                     page.add_redact_annot(safe, fill=fill_color)
-                else:
-                    page.add_redact_annot(target, fill=fill_color)
-            else:
+                # else: skip - cannot safely redact
                 page.add_redact_annot(target, fill=fill_color)
             return 1
 
@@ -125,18 +122,16 @@ class PyMuPDFEngineV2:
         rect: fitz.Rect,
         target_text: str,
         page_words: List[tuple],
-    ) -> Optional[fitz.Rect]:
+    ) -> fitz.Rect:
         """Clip *rect* to remove portions that overlap with non-target text words.
 
-        PyMuPDF's ``apply_redactions`` removes an entire text word (span-level
-        bbox) whenever the redaction rect intersects *any* part of it. This
-        means we can clip the redaction rect *away* from non-target text: as
-        long as the clipped rect still touches the target word's own bbox, it
-        will be fully removed --- but non-target words that only touched the
-        clipped-off portion will survive.
-
-        Returns *None* when the rect becomes empty after clipping (caller
-        should fall back to the unclipped rect in that case).
+        Returns:
+          * Non-empty ``fitz.Rect`` — safe rect to use for redaction
+            (same as input if no overlapping non-target text was found).
+          * Empty ``fitz.Rect`` — clipping impossible (other text fully contains
+            our rect) or resulted in zero area.  Caller **must skip** redaction
+            to avoid damaging non-target text.  Never falls back to the
+            original rect.
         """
         safe = fitz.Rect(rect)
         t_normalized = normalize_text(str(target_text))
@@ -163,38 +158,38 @@ class PyMuPDFEngineV2:
 
             if spans_full_width and spans_full_height:
                 # Other text completely contains safe -> cannot clip to avoid
-                return None
+                return fitz.Rect()  # empty -> caller skips to avoid damaging other text
 
             if spans_full_width:
                 # Other text spans safe's full width -> clip in y-direction
                 if w_y1 >= s_y1:  # other extends below -> clip safe's bottom
-                    safe.y1 = min(s_y1, max(i_y0, s_y0))
+                    safe.y1 = min(s_y1, max(i_y0, s_y0)) - 0.5
                 if w_y0 <= s_y0:  # other extends above -> clip safe's top
-                    safe.y0 = max(s_y0, min(i_y1, s_y1))
+                    safe.y0 = max(s_y0, min(i_y1, s_y1)) + 0.5
 
             elif spans_full_height:
                 # Other text spans safe's full height -> clip in x-direction
                 if w_x1 >= s_x1:  # other extends right -> clip safe's right
-                    safe.x1 = min(s_x1, max(i_x0, s_x0))
+                    safe.x1 = min(s_x1, max(i_x0, s_x0)) - 0.5
                 if w_x0 <= s_x0:  # other extends left -> clip safe's left
-                    safe.x0 = max(s_x0, min(i_x1, s_x1))
+                    safe.x0 = max(s_x0, min(i_x1, s_x1)) + 0.5
 
             else:
                 # Partial overlap in both axes --- clip the axis with more overlap
                 i_w, i_h = i_x1 - i_x0, i_y1 - i_y0
                 if i_h < i_w:
                     if w_y1 >= s_y1:
-                        safe.y1 = min(s_y1, max(i_y0, s_y0))
+                        safe.y1 = min(s_y1, max(i_y0, s_y0)) - 0.5
                     elif w_y0 <= s_y0:
-                        safe.y0 = max(s_y0, min(i_y1, s_y1))
+                        safe.y0 = max(s_y0, min(i_y1, s_y1)) + 0.5
                 else:
                     if w_x1 >= s_x1:
-                        safe.x1 = min(s_x1, max(i_x0, s_x0))
+                        safe.x1 = min(s_x1, max(i_x0, s_x0)) - 0.5
                     elif w_x0 <= s_x0:
-                        safe.x0 = max(s_x0, min(i_x1, s_x1))
+                        safe.x0 = max(s_x0, min(i_x1, s_x1)) + 0.5
 
         if safe.is_empty or safe.get_area() <= 0:
-            return None
+            return fitz.Rect()  # empty -> caller skips
         return safe
 
     def remove_regions(
@@ -212,14 +207,19 @@ class PyMuPDFEngineV2:
         return self.remove_objects(object_list, output_path, fill_color=fill_color)
 
     def remove_text(self, targets: Sequence[str], output_path: str) -> None:
+        """Remove text strings with overlap-safe clipping (same protection as remove_objects)."""
         for page in self.doc:
             has = False
+            page_words = page.get_text("words")
             for text in targets:
                 if not text or not str(text).strip():
                     continue
                 for rect in page.search_for(str(text).strip()):
-                    page.add_redact_annot(rect, fill=(1, 1, 1))
-                    has = True
+                    safe = self._clip_against_other_text(rect, str(text).strip(), page_words)
+                    if not safe.is_empty and safe.get_area() > 0:
+                        page.add_redact_annot(safe, fill=(1, 1, 1))
+                        has = True
+                    # else: skip - cannot safely redact
             if has:
                 page.apply_redactions()
         self.doc.save(output_path, garbage=3, deflate=True)
