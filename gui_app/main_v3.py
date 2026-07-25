@@ -55,7 +55,7 @@ from utils.file_utils import get_supported_files
 # =============================================================================
 # Constants
 # =============================================================================
-APP_TITLE = "PDF Watermark Remover Wizard (Pro V3)"
+APP_TITLE = "PDF 水印清理助手"
 DEFAULT_ZOOM = 1.5
 MIN_ZOOM = 0.5
 MAX_ZOOM = 5.0
@@ -67,6 +67,12 @@ COLOR_HOVER = "#FF4444"
 COLOR_SELECTED = "#FF3333"
 COLOR_REGION = "#9B59B6"  # purple — free-form region
 COLOR_BOX_SELECT = "#00FF00"
+
+# Softer blue-gray surfaces keep the working area distinct without forcing dark mode.
+COLOR_APP_BG = ("#E8EEF5", "#171B22")
+COLOR_SIDEBAR_BG = ("#D8E3F0", "#202833")
+COLOR_STATUS_BG = ("#F4F7FB", "#202833")
+COLOR_CANVAS_BG = "#D7E0EA"
 
 # Default filters: skip drawings for speed (toggleable)
 DEFAULT_FILTERS = ["text", "image"]
@@ -128,6 +134,7 @@ class PDFViewerAppV3(ctk.CTk):
 
         ctk.set_appearance_mode(theme.get("mode", "light"))
         ctk.set_default_color_theme(theme.get("color_theme", "blue"))
+        self.configure(fg_color=COLOR_APP_BG)
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -179,12 +186,14 @@ class PDFViewerAppV3(ctk.CTk):
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
 
-        self._sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)
+        # Controls exceed a compact window height, so keep the sidebar scrollable.
+        # This prevents export and save actions from being clipped below the fold.
+        self._sidebar = ctk.CTkScrollableFrame(
+            self, width=280, corner_radius=0, fg_color=COLOR_SIDEBAR_BG)
         self._sidebar.grid(row=0, column=0, rowspan=2, sticky="nsw")
-        self._sidebar.grid_propagate(False)
         self._build_sidebar()
 
-        self._status = ctk.CTkFrame(self, height=32, corner_radius=0)
+        self._status = ctk.CTkFrame(self, height=32, corner_radius=0, fg_color=COLOR_STATUS_BG)
         self._status.grid(row=0, column=1, sticky="new")
         self._status.grid_propagate(False)
         self._build_status_bar()
@@ -200,28 +209,41 @@ class PDFViewerAppV3(ctk.CTk):
         row = 0
 
         ctk.CTkLabel(
-            self._sidebar, text="📁 Input Files (V3)",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            self._sidebar, text="PDF 去水印",
+            font=ctk.CTkFont(size=18, weight="bold"),
         ).grid(row=row, column=0, padx=12, pady=(16, 4), sticky="w")
         row += 1
 
-        self._file_listbox = ctk.CTkScrollableFrame(self._sidebar, height=160)
+        ctk.CTkLabel(
+            self._sidebar, text="1 选择文件  →  2 标记水印  →  3 导出结果",
+            font=ctk.CTkFont(size=11), text_color="#888888",
+        ).grid(row=row, column=0, padx=12, pady=(0, 6), sticky="w")
+        row += 1
+
+        ctk.CTkLabel(self._sidebar, text="1 选择 PDF", font=ctk.CTkFont(size=13, weight="bold")) \
+            .grid(row=row, column=0, padx=12, pady=(2, 2), sticky="w")
+        row += 1
+        self._file_listbox = ctk.CTkScrollableFrame(self._sidebar, height=120)
         self._file_listbox.grid(row=row, column=0, padx=8, pady=4, sticky="nsew")
         row += 1
 
-        ctk.CTkButton(
-            self._sidebar, text="🔄 Refresh List", width=120,
-            command=self._refresh_file_list,
-        ).grid(row=row, column=0, padx=8, pady=(2, 8))
+        file_actions = ctk.CTkFrame(self._sidebar, fg_color="transparent")
+        file_actions.grid(row=row, column=0, padx=8, pady=(2, 8), sticky="ew")
+        file_actions.grid_columnconfigure((0, 1), weight=1)
+        ctk.CTkButton(file_actions, text="选择 PDF…", command=self._choose_pdf).grid(row=0, column=0, padx=(0, 3), sticky="ew")
+        ctk.CTkButton(file_actions, text="刷新列表", command=self._refresh_file_list).grid(row=0, column=1, padx=(3, 0), sticky="ew")
         row += 1
 
+        ctk.CTkLabel(self._sidebar, text="2 浏览与标记", font=ctk.CTkFont(size=13, weight="bold")) \
+            .grid(row=row, column=0, padx=12, pady=(4, 2), sticky="w")
+        row += 1
         # Page navigation
         nav_frame = ctk.CTkFrame(self._sidebar, fg_color="transparent")
         nav_frame.grid(row=row, column=0, padx=8, pady=4, sticky="ew")
         nav_frame.grid_columnconfigure((0, 1, 2), weight=1)
         self._btn_prev = ctk.CTkButton(nav_frame, text="◀", width=40, command=self._prev_page)
         self._btn_prev.grid(row=0, column=0, padx=2)
-        self._page_label = ctk.CTkLabel(nav_frame, text="Page: -/-", font=ctk.CTkFont(size=13))
+        self._page_label = ctk.CTkLabel(nav_frame, text="第 - / - 页", font=ctk.CTkFont(size=13))
         self._page_label.grid(row=0, column=1)
         self._btn_next = ctk.CTkButton(nav_frame, text="▶", width=40, command=self._next_page)
         self._btn_next.grid(row=0, column=2, padx=2)
@@ -244,19 +266,21 @@ class PDFViewerAppV3(ctk.CTk):
         mode_frame.grid(row=row, column=0, padx=8, pady=4, sticky="ew")
         mode_frame.grid_columnconfigure((0, 1), weight=1)
         self._btn_obj_mode = ctk.CTkButton(
-            mode_frame, text="🎯 对象点选", command=lambda: self._set_mode("object"))
+            mode_frame, text="🎯 点选对象", command=lambda: self._set_mode("object"))
         self._btn_obj_mode.grid(row=0, column=0, padx=2, sticky="ew")
         self._btn_area_mode = ctk.CTkButton(
             mode_frame, text="⬜ 区域框选", command=lambda: self._set_mode("area"))
         self._btn_area_mode.grid(row=0, column=1, padx=2, sticky="ew")
         self._mode_label = ctk.CTkLabel(
-            mode_frame, text="当前: 对象点选 (双击标记)",
+            mode_frame, text="当前：点选对象（双击标记）",
             font=ctk.CTkFont(size=11))
         self._mode_label.grid(row=1, column=0, columnspan=2, pady=(4, 0))
         row += 1
 
-        # Options
-        opt_frame = ctk.CTkFrame(self._sidebar, fg_color="transparent")
+        ctk.CTkLabel(self._sidebar, text="高级匹配设置", font=ctk.CTkFont(size=11), text_color="#888888") \
+            .grid(row=row, column=0, padx=12, pady=(5, 0), sticky="w")
+        row += 1
+        opt_frame = ctk.CTkFrame(self._sidebar, fg_color=("#F1F5F9", "#30343B"), corner_radius=8)
         opt_frame.grid(row=row, column=0, padx=8, pady=4, sticky="ew")
         self._chk_drawings = ctk.CTkCheckBox(
             opt_frame, text="检测矢量路径 (较慢)",
@@ -279,15 +303,15 @@ class PDFViewerAppV3(ctk.CTk):
         row += 1
 
         ctk.CTkLabel(
-            self._sidebar, text="📤 导出 / 保存",
+            self._sidebar, text="3 导出结果",
             font=ctk.CTkFont(size=13, weight="bold"),
         ).grid(row=row, column=0, padx=12, pady=(10, 2), sticky="w")
         row += 1
 
         self._btn_save = ctk.CTkButton(
-            self._sidebar, text="📥 导出到 output 文件夹",
-            fg_color="#27AE60", hover_color="#219A52",
-            command=self._quick_save)
+            self._sidebar, text="导出到 output 文件夹",
+            height=38, fg_color="#27AE60", hover_color="#219A52",
+            font=ctk.CTkFont(size=14, weight="bold"), command=self._quick_save)
         self._btn_save.grid(row=row, column=0, padx=8, pady=(2, 2), sticky="ew")
         row += 1
 
@@ -324,10 +348,9 @@ class PDFViewerAppV3(ctk.CTk):
         row += 1
 
         tip = (
-            "V3 提示:\n"
-            "• 重叠时优先最小框 (Tab 切换)\n"
-            "• 框选默认只标对象, 不整块涂白\n"
-            "• ←/→ 翻页  Cmd/Ctrl+S 导出"
+            "提示：双击对象可标记；重叠时按 Tab 切换。\n"
+            "框选默认只标记对象，不会整块涂白。\n"
+            "←/→ 翻页；Cmd/Ctrl + S 快速导出。"
         )
         ctk.CTkLabel(
             self._sidebar, text=tip, justify="left",
@@ -347,7 +370,7 @@ class PDFViewerAppV3(ctk.CTk):
 
         self._canvas = Canvas(
             self._canvas_frame,
-            bg="#2C2C2C" if ctk.get_appearance_mode() == "Dark" else "#E8E8E8",
+            bg="#2C2C2C" if ctk.get_appearance_mode() == "Dark" else COLOR_CANVAS_BG,
             highlightthickness=0,
             xscrollcommand=self._hbar.set,
             yscrollcommand=self._vbar.set,
@@ -373,12 +396,13 @@ class PDFViewerAppV3(ctk.CTk):
             pass
 
         self._placeholder_id = self._canvas.create_text(
-            600, 400, text="📂 请从左侧选择一个 PDF 文件\n或将 PDF 拖入 input/ 后刷新",
+            600, 400, text="📂 请选择一个 PDF 文件\n可点“选择 PDF…”或从 input/ 列表打开",
             font=("Helvetica", 18), fill="#888888")
+        self._set_mode(self._mode)
 
     def _build_status_bar(self):
         self._status_label = ctk.CTkLabel(
-            self._status, text="Ready. (V3 Optimized)", anchor="w",
+            self._status, text="准备就绪", anchor="w",
             font=ctk.CTkFont(size=11))
         self._status_label.pack(side="left", padx=12, pady=4)
 
@@ -434,6 +458,18 @@ class PDFViewerAppV3(ctk.CTk):
     # ------------------------------------------------------------------
     # File Management
     # ------------------------------------------------------------------
+    def _choose_pdf(self):
+        """Open a PDF directly, without requiring users to copy it into input/."""
+        from tkinter import filedialog
+
+        path = filedialog.askopenfilename(
+            parent=self,
+            title="选择要处理的 PDF",
+            filetypes=[("PDF 文件", "*.pdf"), ("所有文件", "*.*")],
+        )
+        if path:
+            self._open_pdf(path)
+
     def _refresh_file_list(self):
         for w in self._file_listbox.winfo_children():
             w.destroy()
@@ -529,7 +565,7 @@ class PDFViewerAppV3(ctk.CTk):
         self._redraw_marked()
 
         self._page_label.configure(
-            text=f"Page: {self._current_page + 1}/{self._doc.page_count}")
+            text=f"第 {self._current_page + 1} / {self._doc.page_count} 页")
         total_marked = self._count_all_marks()
         self._stats_label.configure(text=f"已标记: {total_marked} 处")
         self._status_count.configure(text=f"检测到 {len(self._page_objects)} 个对象")
@@ -1235,10 +1271,14 @@ class PDFViewerAppV3(ctk.CTk):
     def _set_mode(self, mode: str):
         self._mode = mode
         if mode == "object":
-            self._mode_label.configure(text="当前: 对象点选 (双击标记)")
+            self._mode_label.configure(text="当前：点选对象（双击标记）")
+            self._btn_obj_mode.configure(fg_color="#1F6AA5")
+            self._btn_area_mode.configure(fg_color=("#3A7EBF", "#1F538D"))
             self._canvas.config(cursor="crosshair")
         else:
-            self._mode_label.configure(text="当前: 区域框选 (可自由矩形)")
+            self._mode_label.configure(text="当前：区域框选（拖拽标记）")
+            self._btn_obj_mode.configure(fg_color=("#3A7EBF", "#1F538D"))
+            self._btn_area_mode.configure(fg_color="#1F6AA5")
             self._canvas.config(cursor="tcross")
         self._area_start = None
         if self._area_rect_id is not None:

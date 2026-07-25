@@ -79,6 +79,8 @@ def save_config(config):
         if config["api_keys"].get("dashscope"):
             with open(API_KEY_FILE, "w", encoding="utf-8") as f:
                 f.write(config["api_keys"]["dashscope"])
+        elif os.path.exists(API_KEY_FILE):
+            os.remove(API_KEY_FILE)
     except Exception as e:
         print(f"Error saving config: {e}")
 

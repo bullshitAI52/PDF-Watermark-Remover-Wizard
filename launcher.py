@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 import traceback
-from utils.config_manager import load_config, save_config, ensure_dirs, INPUT_DIR
+from utils.config_manager import ensure_dirs, INPUT_DIR
 from utils.file_utils import get_supported_files
 
 if getattr(sys, "frozen", False):
@@ -13,41 +13,24 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 MENU_ITEMS = [
-    ("1", "🖥️  可视化智能清理 V3 (优化版 - 推荐)", "后台全书同步、自由区域框选、按页导出、可取消。"),
-    ("2", "🖥️  可视化智能清理 V2 (经典版)", "原版界面：双击点选、框选Logo、全书同步。"),
-    ("4", "🪄  AI 图像修补 (Cloud Mode)", "针对图片型 PDF 的完美背景修复 (需 API Key)。"),
-    ("5", "☢️  核弹模式 (Vector Killer)", "强力清除 PDF 中的矢量路径与图形水印。"),
-    ("6", "🖼️  本地图片模式 (Offline)", "离线快速清理扫描件背景、图片文件夹。"),
-    ("7", "⚙️  系统设置", "配置大模型 API Key 及全局选项。"),
+    ("1", "🖥️  可视化智能清理（推荐）", "直接选择 PDF、点选/框选水印、可同步到全书。"),
+    ("2", "🪄  AI 图像修补（云端）", "适用于复杂扫描件；需配置 API Key，可能产生费用。"),
+    ("3", "☢️  矢量强力清理", "批量删除矢量图形；请先备份原文件并检查输出。"),
+    ("4", "🖼️  本地图片清理", "离线处理扫描件或图片，速度快但会转为图像。"),
+    ("5", "⚙️  系统设置", "图形化配置 API Key、测试云端连接与查看隐私提示。"),
 ]
 
 # Map choices to script paths
 SCRIPT_MAP = {
     "1": ("gui_app/main_v3.py", []),
-    "2": ("gui_app/main_v2.py", []),
-    "4": ("image_mode_pic_watermark/raster_cleaner.py", ["--mode", "2"]),
-    "5": ("core/vector_killer.py", []),
-    "6": ("image_mode_pic_watermark/raster_cleaner.py", ["--mode", "1"]),
+    "2": ("image_mode_pic_watermark/raster_cleaner.py", ["--mode", "2"]),
+    "3": ("core/vector_killer.py", []),
+    "4": ("image_mode_pic_watermark/raster_cleaner.py", ["--mode", "1"]),
+    "5": ("gui_app/settings_window.py", []),
 }
 
 def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
-
-def set_api_key():
-    print("\n--- ⚙️ Set DashScope API Key ---")
-    print("Get your key from: https://bailian.console.aliyun.com/")
-    config = load_config()
-    current_key = config["api_keys"].get("dashscope", "")
-    if current_key:
-        print(f"Current Key: {current_key[:4]}...{current_key[-4:]}")
-    
-    key = input("Enter New API Key (or press Enter to keep current): ").strip()
-    if key:
-        config["api_keys"]["dashscope"] = key
-        save_config(config)
-        print("✅ Key saved successfully.")
-    else:
-        print("Operation cancelled.")
 
 def run_script(script_rel_path, args):
     script_path = os.path.join(BASE_DIR, script_rel_path)
@@ -60,15 +43,16 @@ def run_script(script_rel_path, args):
 
 def print_menu():
     print("========================================")
-    print("    PDF Watermark Remover (Pro V0.3)")
+    print("       PDF 水印清理助手")
     print("========================================")
-    print(f" Detected {len(get_supported_files(INPUT_DIR))} supported files in 'input' folder.")
+    print(f" input/ 中有 {len(get_supported_files(INPUT_DIR))} 个待处理文件")
+    print(" 直接回车即可打开推荐的可视化清理模式。")
     print("========================================")
     for key, title, description in MENU_ITEMS:
         print(f"{key}. {title}")
         print(f"       - {description}")
         print("----------------------------------------")
-    print("0. ❌  Exit")
+    print("0. 退出")
     print("========================================")
 
 def launcher_menu():
@@ -77,12 +61,10 @@ def launcher_menu():
     while True:
         clear_screen()
         print_menu()
-        choice = input("Choice (0-7): ").strip().lower()
+        choice = input("请选择模式 [默认 1]：").strip().lower() or "1"
 
         if choice == "0":
             sys.exit(0)
-        elif choice == "7":
-            set_api_key()
         elif choice in SCRIPT_MAP:
             script_path, args = SCRIPT_MAP[choice]
             try:
@@ -91,9 +73,9 @@ def launcher_menu():
                 print(f"\n❌ Error: {exc}")
                 traceback.print_exc()
         else:
-            print(f"Invalid choice: {choice}")
+            print(f"无效选择：{choice}")
 
-        input("\nPress Enter to continue...")
+        input("\n按回车键返回主菜单…")
 
 if __name__ == "__main__":
     launcher_menu()
